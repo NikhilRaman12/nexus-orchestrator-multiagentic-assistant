@@ -1,0 +1,220 @@
+// ===============================================================
+// NEXUS Security Rules
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// Collection: tasks
+// Fields:
+//   - userId: string (required, immutable)
+//   - title: string (required, min 1, max 200)
+//   - description: string (optional, max 2000)
+//   - subtasks: list (optional, max 50 objects)
+//   - status: string (required, enum: todo, in_progress, done, blocked)
+//   - priority: number (required, 1-4)
+//   - dueDate: timestamp (optional)
+//   - createdAt: timestamp (required, immutable)
+//   - tags: list (optional, max 10 strings)
+//
+// Collection: events
+// Fields:
+//   - userId: string (required, immutable)
+//   - title: string (required, min 1, max 200)
+//   - start: timestamp (required)
+//   - end: timestamp (required)
+//   - timezone: string (required)
+//   - location: string (optional)
+//   - attendees: list (optional)
+//
+// Collection: notes
+// Fields:
+//   - userId: string (required, immutable)
+//   - title: string (required, min 1, max 200)
+//   - body: string (required, max 10000)
+//   - tags: list (optional)
+//   - createdAt: timestamp (required, immutable)
+//
+// Collection: agent_logs
+// Fields:
+//   - userId: string (required, immutable)
+//   - agent: string (required)
+//   - action: string (required)
+//   - status: string (required)
+//   - durationMs: number (required)
+//   - timestamp: timestamp (required, immutable)
+//
+// Collection: workflow_sessions
+// Fields:
+//   - userId: string (required, immutable)
+//   - name: string (required)
+//   - steps: list (required)
+//   - currentStep: number (required)
+//   - status: string (required)
+//   - createdAt: timestamp (required, immutable)
+//   - updatedAt: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function userIdUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+
+    function userIdNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidList(field, maxItems) {
+      return !(field in request.resource.data) || (request.resource.data[field] is list && request.resource.data[field].size() <= maxItems);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidTask(data) {
+      return hasRequiredFields(['userId', 'title', 'status', 'priority', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.status in ['todo', 'in_progress', 'done', 'blocked'] &&
+             data.priority >= 1 && data.priority <= 4 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('subtasks' in data) || (data.subtasks is list && data.subtasks.size() <= 50));
+    }
+
+    function isValidEvent(data) {
+      return hasRequiredFields(['userId', 'title', 'start', 'end', 'timezone']) &&
+             data.userId == request.auth.uid &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.start is timestamp && data.end is timestamp &&
+             data.start <= data.end;
+    }
+
+    function isValidNote(data) {
+      return hasRequiredFields(['userId', 'title', 'body', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.body is string && data.body.size() <= 10000;
+    }
+
+    function isValidLog(data) {
+      return hasRequiredFields(['userId', 'agent', 'action', 'status', 'durationMs', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.agent is string && data.action is string && data.status is string &&
+             data.durationMs is number && data.timestamp is timestamp;
+    }
+
+    function isValidSession(data) {
+      return hasRequiredFields(['userId', 'name', 'steps', 'currentStep', 'status', 'createdAt', 'updatedAt']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.steps is list && data.currentStep is number &&
+             data.status is string && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function isValidNews(data) {
+      return hasRequiredFields(['userId', 'date', 'source', 'headline', 'summary', 'dashboard_note_id']) &&
+             data.userId == request.auth.uid &&
+             data.date is timestamp &&
+             data.source is string && data.source.size() >= 1 && data.source.size() <= 100 &&
+             data.headline is string && data.headline.size() >= 1 && data.headline.size() <= 500 &&
+             data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 2000 &&
+             data.dashboard_note_id is string &&
+             (!('subtasks' in data) || (data.subtasks is list && data.subtasks.size() <= 50));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /tasks/{taskId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidTask(request.resource.data);
+      allow update: if isDocOwner() && isValidTask(request.resource.data) && 
+                      request.resource.data.createdAt == resource.data.createdAt &&
+                      userIdNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /events/{eventId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidEvent(request.resource.data);
+      allow update: if isDocOwner() && isValidEvent(request.resource.data) &&
+                      userIdNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /notes/{noteId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidNote(request.resource.data);
+      allow update: if isDocOwner() && isValidNote(request.resource.data) &&
+                      request.resource.data.createdAt == resource.data.createdAt &&
+                      userIdNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /agent_logs/{logId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidLog(request.resource.data);
+      allow update: if false; // Logs are immutable
+      allow delete: if isDocOwner();
+    }
+
+    match /workflow_sessions/{sessionId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidSession(request.resource.data);
+      allow update: if isDocOwner() && isValidSession(request.resource.data) &&
+                      request.resource.data.createdAt == resource.data.createdAt &&
+                      userIdNotModified();
+      allow delete: if isDocOwner();
+    }
+
+    match /ai_news/{newsId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidNews(request.resource.data);
+      allow update: if isDocOwner() && isValidNews(request.resource.data) &&
+                      request.resource.data.date == resource.data.date &&
+                      userIdNotModified();
+      allow delete: if isDocOwner();
+    }
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+  }
+}

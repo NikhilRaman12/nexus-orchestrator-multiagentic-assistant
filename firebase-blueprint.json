@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "Task": {
+      "title": "Task",
+      "description": "A task to be completed by the user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "subtasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "completed": { "type": "boolean" }
+            },
+            "required": ["id", "title", "completed"]
+          }
+        },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "done", "blocked"] },
+        "priority": { "type": "integer", "enum": [1, 2, 3, 4] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["userId", "title", "status", "priority"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "A calendar event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "timezone": { "type": "string" },
+        "location": { "type": "string" },
+        "attendees": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["userId", "title", "start", "end"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "A note or document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "body"]
+    },
+    "AgentLog": {
+      "title": "AgentLog",
+      "description": "Log of agent actions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "agent": { "type": "string" },
+        "action": { "type": "string" },
+        "status": { "type": "string" },
+        "durationMs": { "type": "integer" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "agent", "action", "status", "timestamp"]
+    },
+    "WorkflowSession": {
+      "title": "WorkflowSession",
+      "description": "State of a multi-step workflow.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "steps": { "type": "array" },
+        "currentStep": { "type": "integer" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "steps", "currentStep", "status"]
+    },
+    "AINews": {
+      "title": "AINews",
+      "description": "A structured AI news entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "source": { "type": "string" },
+        "headline": { "type": "string" },
+        "summary": { "type": "string" },
+        "dashboard_note_id": { "type": "string" },
+        "subtasks": { "type": "array" }
+      },
+      "required": ["userId", "date", "source", "headline", "summary", "dashboard_note_id"]
+    }
+  },
+  "firestore": {
+    "/tasks/{taskId}": { "schema": "Task", "description": "User tasks" },
+    "/events/{eventId}": { "schema": "Event", "description": "User events" },
+    "/notes/{noteId}": { "schema": "Note", "description": "User notes" },
+    "/ai_news/{newsId}": { "schema": "AINews", "description": "AI News entries" },
+    "/agent_logs/{logId}": { "schema": "AgentLog", "description": "Agent activity logs" },
+    "/workflow_sessions/{sessionId}": { "schema": "WorkflowSession", "description": "Active workflow states" }
+  }
+}
